@@ -1,136 +1,179 @@
-# InputTextX Plugin
+# InputTextX
 
-**InputTextX** is a Rainmeter plugin that provides an on-screen input field with customizable properties. It supports custom fonts (TTF and OTF), dynamic colors, border options, topmost behavior, and more. The plugin’s position is computed only once when started, and it can be fully reset on command.
+**InputTextX** is a Rainmeter plugin that provides an interactive, customizable on‐screen text input overlay. It allows Rainmeter skins to collect user input with flexible appearance, filtering, and behavior options.
+
+---
 
 ## Features
 
-- **Customizable Appearance:**  
-  Set the input field's width, height, font size, font face, string style (Normal, Bold, Italic, BoldItalic), solid background color, and font color.
-  
-- **Border Control:**  
-  Choose to show or hide the border around the input field.
-  
-- **TopMost Behavior:**  
-  Control whether the input field always remains on top or not. If the skin is topmost, the plugin can force the input field to remain visible.
-  
-- **Dynamic Properties:**  
-  Many properties are dynamically reloadable via Rainmeter variables.
-  
-- **Password Mode:**  
-  Mask input characters with '*' when in password mode.
-  
-- **Event Actions:**  
-  Execute Rainmeter bangs on text change, dismiss, invalid input, Escape, and Enter.
+- **Multiple Input Types:**
+  - Supports _String_, _Integer_, _Float_, _Letters_, _Alphanumeric_, _Hexadecimal_, _Email_, and _Custom_ allowed characters.
+- **Customizable Appearance:**
+  - Define dimensions, colors (background, font, border), font size, style, and face.
+  - Optionally enable a custom border with configurable color and thickness.
+- **Input Filtering & Validation:**
+  - Filters invalid characters based on the chosen input type.
+  - Supports numeric range validation using `MinValue` and `MaxValue`.
+- **Behavioral Options:**
+  - Multiline support with optional scrollbars.
+  - Define a character input limit and a default text value.
+  - Configurable actions on submission, dismissal, ESC key, and invalid input.
+- **Positioning & Z‑Order Control:**
+  - Configure offset relative to the skin.
+  - Control TopMost behavior to determine whether the overlay appears above all windows.
 
-- **Full Reset on Stop:**  
-  Fully disposes and resets the plugin when stopped.
-
-## Documentation
-
-| Option             | Type          | Default          | Description                                                                                                                |
-|--------------------|---------------|------------------|----------------------------------------------------------------------------------------------------------------------------|
-| **InitialText**    | String        | (empty)          | The text to display initially in the input field.                                                                        |
-| **OnTextChangedAction** | String  | (empty)          | Rainmeter bang to execute when the text changes.                                                                         |
-| **OnDismissAction**| String        | (empty)          | Rainmeter bang to execute when the input field is dismissed.                                                             |
-| **OnInvalidAction**| String        | (empty)          | Rainmeter bang to execute when an invalid character is entered.                                                          |
-| **OnESCAction**    | String        | (empty)          | Rainmeter bang to execute when the Escape key is pressed.                                                                |
-| **OnEnterAction**  | String        | (empty)          | Rainmeter bang to execute when Enter is pressed.                                                                         |
-| **Width**          | Integer       | 300              | Width of the input field (in pixels).                                                                                    |
-| **Height**         | Integer       | 50               | Height of the input field (in pixels).                                                                                   |
-| **FontSize**       | Integer       | 12               | Font size of the text.                                                                                                   |
-| **FontColor**      | RGB String    | "0,0,0"          | Color of the text, in R,G,B format.                                                                                      |
-| **StringAlign**    | String        | "Left"           | Alignment of the text: "Left", "Center", or "Right".                                                                     |
-| **Password**       | Boolean (0/1) | 0                | When set to 1, the input field masks characters with '*'.                                                              |
-| **StringStyle**    | String        | "Normal"         | Style of the font: "Normal", "Bold", "Italic", or "BoldItalic".                                                          |
-| **FontFace**       | String        | "Segoe UI"       | Name of the font family (e.g., "Ubuntu"). The plugin will try to load the corresponding TTF/OTF from the Fonts folder.     |
-| **SolidColor**     | RGB String    | "255,255,255"    | The solid background color of the input field, in R,G,B format.                                                          |
-| **Multiline**      | Boolean (0/1) | 0                | If set to 1, the input field supports multiple lines.                                                                    |
-| **InputType**      | String        | "String"         | Specifies the input type: "String", "Integer", "Float", "Letters", "Alphanumeric", "Hexadecimal", "Email", or "Custom".   |
-| **UnFocusDismiss** | Boolean (0/1) | 0                | If set to 1, the input field dismisses when it loses focus.                                                              |
-| **InputLimit**     | Integer       | 0                | Maximum number of characters allowed (0 = no limit).                                                                     |
-| **X**              | Integer       | 0                | Horizontal offset (in pixels) added to the skin’s current X position.                                                    |
-| **Y**              | Integer       | 0                | Vertical offset (in pixels) added to the skin’s current Y position.                                                      |
-| **InputTopMost**   | String        | (empty)          | "1" forces the input field to be always on top, "0" forces it not to be topmost (unless the skin is topmost).             |
-| **TopMostOffsetY** | Integer       | 0                | Additional vertical offset (in pixels) when InputTopMost is "1". Can be negative to adjust upward.                         |
-| **Border**         | String        | "1"              | "1" shows a border around the input field; "0" hides the border.                                                         |
-| **WindowTopMost**  | String        | "0"              | (Optional) Indicates whether the skin itself is topmost. Used by the plugin to decide whether to force the input field on top.|
+---
 
 ## Installation
 
-1. **Compile the Plugin:**  
-   Use Visual Studio (or your preferred IDE) to compile the project as a DLL named **InputTextX.dll**.
+1. **Download the Plugin:**Clone or download the latest release from the [GitHub Releases](#) page.
+2. **Extract Files:**Place the extracted files into your Rainmeter `Plugins` folder (typically `C:\Users\<YourUser>\Documents\Rainmeter\Plugins`).
+3. **Configure Your Skin:**Include the plugin in your Rainmeter skin configuration (see [Usage Example](#usage-example) below).
+4. **Restart Rainmeter:**
+   Reload your skins or restart Rainmeter for the plugin to initialize.
 
-2. **Copy to Plugins Folder:**  
-   Place the compiled **InputTextX.dll** into your Rainmeter Plugins folder (usually `C:\Users\<username>\Documents\Rainmeter\Plugins\`).
+---
 
-3. **Configure Your Skin:**  
-   Create or update your Rainmeter skin INI file to include a measure using the plugin, and define your desired options (see the configuration table above).
+## Configuration Parameters
 
-## Example Skin Configuration
+Below is a table of all configurable parameters available in InputTextX:
+
+| **Parameter**       | **Type** | **Default**   | **Description**                                                                                                                                                                                                           |
+| ------------------------- | -------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **W**               | Integer        | `300`             | Width of the input box.                                                                                                                                                                                                         |
+| **H**               | Integer        | `40`              | Height of the input box.                                                                                                                                                                                                        |
+| **SolidColor**      | String         | `"255,255,255"`   | Background color (RGB). If provided with an alpha value (e.g.`"255,255,255,255"`), the alpha is ignored.                                                                                                                      |
+| **FontColor**       | String         | `"0,0,0"`         | Font color in RGB.                                                                                                                                                                                                              |
+| **FontSize**        | Integer        | `12`              | Size of the input text.                                                                                                                                                                                                         |
+| **Align**           | String         | `"Center"`        | Text alignment:`Left`, `Center`, or `Right`.                                                                                                                                                                              |
+| **Password**        | Integer        | `0`               | Set to `1` to mask the input for password entry.                                                                                                                                                                              |
+| **FontStyle**       | String         | `"Normal"`        | Font style:`Normal`, `Bold`, `Italic`, or `BoldItalic`.                                                                                                                                                                 |
+| **FontFace**        | String         | `"Segoe UI"`      | Font family name or a full path to a custom font file.                                                                                                                                                                          |
+| **Multiline**       | Integer        | `0`               | Set to `1` to enable multiline input.                                                                                                                                                                                         |
+| **AllowScroll**     | Integer        | `0`               | Enable scrollbars in multiline mode by setting to `1`.                                                                                                                                                                        |
+| **InputLimit**      | Integer        | `0`               | Maximum number of characters (0 for no limit).                                                                                                                                                                                  |
+| **DefaultValue**    | String         | `""`              | Default text displayed in the input box.                                                                                                                                                                                        |
+| **InputType**       | String         | `"String"`        | Allowed input type. Options:`String`, `Integer`, `Float`, `Letters`, `Alphanumeric`, `Hexadecimal`, `Email`, `Custom`.                                                                                          |
+| **AllowedChars**    | String         | `""`              | Custom allowed characters if `InputType` is set to `Custom`.                                                                                                                                                                |
+| **OnDismissAction** | String         | `""`              | Action executed when the input overlay is dismissed.                                                                                                                                                                            |
+| **OnEnterAction**   | String         | `""`              | Action executed when the input is submitted.                                                                                                                                                                                    |
+| **OnESCAction**     | String         | `""`              | Action executed when the ESC key is pressed.                                                                                                                                                                                    |
+| **InValidAction**   | String         | `""`              | Action executed when invalid input is detected.                                                                                                                                                                                 |
+| **X**               | Integer        | `0`               | Horizontal offset relative to the Rainmeter skin's base position.                                                                                                                                                               |
+| **Y**               | Integer        | `0`               | Vertical offset relative to the Rainmeter skin's base position.                                                                                                                                                                 |
+| **AllowBorder**     | Integer        | `0`               | Set to `1` to enable a custom border.                                                                                                                                                                                         |
+| **BorderColor**     | String         | `"0,0,0"`         | Color of the border in RGB.                                                                                                                                                                                                     |
+| **BorderThickness** | Integer        | `2`               | Thickness of the border.                                                                                                                                                                                                        |
+| **MinValue**        | Double         | `double.MinValue` | Minimum value allowed for numeric inputs.                                                                                                                                                                                       |
+| **MaxValue**        | Double         | `double.MaxValue` | Maximum value allowed for numeric inputs.                                                                                                                                                                                       |
+| **TopMost**         | Integer        | `1`               | Set to `1` to force the input overlay above all windows, or `0` to allow normal window behavior.                                                                                                                            |
+| UnFocusDismiss            | Integer        | `1`               | **1:** The input overlay is dismissed when it loses focus (clicking outside will close it).<br />**0:** The input overlay remains active, and clicks are redirected to the input box, preventing <br />dismissal. |
+
+---
+
+## Usage Example
+
+Below is an example configuration snippet for a Rainmeter skin using InputTextX:
 
 ```ini
 [Rainmeter]
-Update=50
-DynamicVariables=1
+Update=1000
 
-[MeasureInput]
+[Metadata]
+Name=InputTextX Example
+Author=Your Name
+
+[Variables]
+CURRENTCONFIGX=100
+CURRENTCONFIGY=100
+CURRENTCONFIGWIDTH=800
+CURRENTCONFIGHEIGHT=600
+
+[MeasureInputText]
 Measure=Plugin
 Plugin=InputTextX.dll
-InitialText=Your initial text
-OnTextChangedAction=[!Log "Text changed"]
-OnDismissAction=[!Log "Dismissed"]
-OnInvalidAction=[!Log "Invalid input"]
-OnESCAction=[!Log "ESC pressed"]
-OnEnterAction=[!Log "Entered: [MeasureInput:GetString]"]
-Width=400
-Height=60
-FontSize=14
-FontColor=255,0,0
-StringAlign=Center
-Password=1
-StringStyle=BoldItalic
-FontFace=Ubuntu
+W=300
+H=40
 SolidColor=255,255,255
+FontColor=0,0,0
+FontSize=14
+Align=Center
+Password=0
+FontStyle=Normal
+FontFace=Segoe UI
 Multiline=0
+AllowScroll=0
+InputLimit=0
+DefaultValue=Type here...
 InputType=String
-UnFocusDismiss=0
-InputLimit=20
-X=20
-Y=20
-InputTopMost=0
-TopMostOffsetY=-20
-Border=1
-WindowTopMost=1
+AllowedChars=
+OnDismissAction=
+OnEnterAction=!Log "Input Submitted"
+OnESCAction=!Log "Input Cancelled"
+InValidAction=!Log "Invalid Input"
+X=0
+Y=0
+AllowBorder=1
+BorderColor=0,0,0
+BorderThickness=2
+MinValue=-100
+MaxValue=100
+TopMost=1
 ```
 
-## Usage
+---
 
-- **Starting the Input Field:**  
-  Use the Rainmeter bang command:  
-  `!CommandMeasure MeasureInput "Start"`  
-  This computes the position only once and displays the input field with the specified options.
+## Detailed Documentation
 
-- **Stopping/Resetting the Plugin:**  
-  Use the Rainmeter bang command:  
-  `!CommandMeasure MeasureInput "Stop"`  
-  This fully resets the plugin (disposing and reinitializing the input field).
+### Overview
 
-## Notes & Warnings
+InputTextX provides a Rainmeter skin with an input overlay that can capture user text input. It leverages Windows Forms to create an overlay and a text box which can be customized extensively through configuration parameters. The plugin supports a range of input types, filters invalid characters, and validates numeric inputs against a defined range.
 
-- **Dynamic Variables:**  
-  Many options (colors, font properties, etc.) update dynamically when the skin is reloaded. However, the input field’s position is computed only once on start. To update the position, you must stop and restart the plugin.
+### Input Filtering and Validation
 
-- **TopMost Behavior:**  
-  The plugin tries to honor the **InputTopMost** setting. If set to "0" but the skin is topmost (determined by the variable "WindowTopMost"), the plugin forces the input field on top. Ensure that your skin defines "WindowTopMost" correctly if you rely on this behavior.
+- **InputType:**Determines what kind of characters are allowed. For instance, setting it to `Integer` restricts input to digits (with an optional leading minus).
+- **AllowedChars:**When using `Custom` as the input type, only the characters defined in this parameter are permitted.
+- **Numeric Range:**
+  When the input type is `Integer` or `Float`, the plugin validates that the input falls within the range defined by `MinValue` and `MaxValue`.
 
-- **Border Option:**  
-  Set **Border=1** to show a border around the input field or **Border=0** to hide it.
+### Appearance and Behavior
 
-- **Font Loading:**  
-  The plugin attempts to load custom fonts from the folder defined by Rainmeter’s `#@#` variable combined with a "Fonts" subfolder. If the custom font file is not found, it falls back to a system font and ultimately to "Segoe UI". Make sure your fonts are placed in the correct folder.
+- **Custom Border:**By setting `AllowBorder` to 1, you can draw a border around the input box. Configure the border’s appearance using `BorderColor` and `BorderThickness`. The plugin uses a container panel with padding to display only the border rim.
+- **TopMost Option:**
+  The `TopMost` parameter controls whether the input overlay should appear above all other windows (including Rainmeter skins). Setting `TopMost` to 1 forces the input overlay to be topmost.
 
-- **Performance:**  
-  Setting a low Update interval (e.g., Update=50) may cause issues if the skin forces frequent reloads. The plugin minimizes flickering by computing the position only once, but heavy dynamic changes could still affect performance.
+### Logging
 
-- **Disposal & Reset:**  
-  When stopping the plugin, it fully disposes of the input field. Ensure you use the Stop command (`!CommandMeasure MeasureInput "Stop"`) to reset the plugin correctly.
+The plugin logs key events and configuration details to help with debugging. Check the Rainmeter log for messages prefixed with “InputOverlay” or “InputTextX” for details.
+
+---
+
+## Warnings and Limitations
+
+- **Operating System:**InputTextX is designed for Windows. It uses Win32 API calls and Windows Forms.
+- **Skin Compatibility:**If the Rainmeter skin is set to TopMost, the plugin may need the `TopMost` parameter to be configured appropriately to maintain overlay visibility.
+- **Input Focus Behavior:**When `UnFocusDismiss` is set to 0, mouse clicks on the overlay are intercepted to redirect focus to the input box. This may not work perfectly in all multi-monitor or complex skin scenarios.
+- **Performance:**
+  Using multiple overlay windows can impact performance on lower-end systems.
+
+---
+
+## Contribution
+
+Contributions, bug fixes, and feature requests are welcome. Please fork the repository and submit a pull request or open an issue.
+
+---
+
+## License
+
+This project is licensed under the MIT License.
+
+---
+
+## Contact
+
+For questions, issues, or further discussion, please open an issue on the GitHub repository or contact the maintainer at [YourEmail@example.com].
+
+---
+
+Feel free to adapt this README to better fit your project details and style.

@@ -8,7 +8,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using Rainmeter;
 
-namespace InputTextX
+namespace BlurInputXPlugin
 {
     // Define an enumeration for the allowed input types.
     public enum InputTypeOption
@@ -38,48 +38,52 @@ namespace InputTextX
         private Color fontColor = Color.Black;
         private float fontSize = 12f;
 
-        // New appearance properties.
+        // Appearance properties.
         private HorizontalAlignment textAlign = HorizontalAlignment.Center;
         private bool isPassword = false;
         private FontStyle fontStyleParam = FontStyle.Regular;
         private string fontFace = "Segoe UI"; // default or custom font family name
 
-        // New behavioral properties.
+        // Behavioral properties.
         private bool multiline = false;
         private int allowScroll = 0; // 1 = allow scrollbars in multiline
         private int inputLimit = 0;  // 0 means no limit
         private string defaultValue = "";
 
-        // New input filtering properties.
+        // Input filtering properties.
         private InputTypeOption inputType = InputTypeOption.String;
         private string allowedChars = ""; // used if inputType==Custom
 
-        // New action parameters.
+        // Action parameters.
         private string onDismissAction = "";
         private string onEnterAction = "";
         private string onESCAction = "";
         private string onInvalidAction = "";
 
-        // New offset parameters.
+        // Offset parameters.
         private int offsetX = 0;
         private int offsetY = 0;
 
-        // New border parameters.
+        // Border parameters.
         private int allowBorder = 0;
         private Color borderColor = Color.Black;
         private int borderThickness = 2;
 
-        // New numeric range parameters.
+        // Numeric range parameters.
         private double minValue = double.MinValue;
         private double maxValue = double.MaxValue;
 
-        // New TopMost parameter.
+        // TopMost parameter.
         private int topMost = 1;
+
+        // Logging parameter.
+        private int logging = 0;
 
         internal void Reload(API api, ref double maxValueOut)
         {
             _api = api;
-            _api.Log(API.LogType.Notice, "Reloading measure...");
+            if (logging == 1)
+                _api.Log(API.LogType.Notice, "Reloading measure...");
             unFocusDismiss = api.ReadInt("UnFocusDismiss", 1);
 
             inputWidth = api.ReadInt("W", 300);
@@ -137,8 +141,10 @@ namespace InputTextX
             maxValue = api.ReadDouble("MaxValue", double.MaxValue);
 
             topMost = api.ReadInt("TopMost", 1);
+            logging = api.ReadInt("Logging", 0);
 
-            _api.Log(API.LogType.Notice, $"Reload complete. Input dimensions: {inputWidth}x{inputHeight}");
+            if (logging == 1)
+                _api.Log(API.LogType.Notice, $"Reload complete. Input dimensions: {inputWidth}x{inputHeight}, TopMost: {topMost}, Logging: {logging}");
         }
 
         internal double Update() => currentText.Length;
@@ -149,18 +155,39 @@ namespace InputTextX
             if (string.IsNullOrEmpty(command))
                 return;
 
+            if (command.Equals("Stop", StringComparison.InvariantCultureIgnoreCase))
+            {
+                if (logging == 1)
+                    _api.Log(API.LogType.Notice, "ExecuteCommand: Stop command received.");
+                if (inputOverlay != null && !inputOverlay.IsDisposed)
+                {
+                    inputOverlay.Invoke(new Action(() => inputOverlay.Close()));
+                    if (logging == 1)
+                        _api.Log(API.LogType.Notice, "Input overlay stopped.");
+                }
+                else if (logging == 1)
+                {
+                    _api.Log(API.LogType.Notice, "No active input overlay to stop.");
+                }
+                return;
+            }
+
             if (command.Equals("Start", StringComparison.InvariantCultureIgnoreCase))
             {
-                _api.Log(API.LogType.Notice, "ExecuteCommand: Starting input overlay...");
+                if (logging == 1)
+                    _api.Log(API.LogType.Notice, "ExecuteCommand: Start command received.");
+                // Always show the input overlay (regardless of logging mode)
                 if (inputThread == null || !inputThread.IsAlive)
                 {
                     inputThread = new Thread(() =>
                     {
                         int baseX = int.Parse(_api.ReplaceVariables("#CURRENTCONFIGX#"));
                         int baseY = int.Parse(_api.ReplaceVariables("#CURRENTCONFIGY#"));
-                        _api.Log(API.LogType.Notice, $"Base coordinates: {baseX},{baseY}");
-                        _api.Log(API.LogType.Notice, $"Offset: {offsetX},{offsetY}");
-
+                        if (logging == 1)
+                        {
+                            _api.Log(API.LogType.Notice, $"Base coordinates: {baseX},{baseY}");
+                            _api.Log(API.LogType.Notice, $"Offset: {offsetX},{offsetY}");
+                        }
                         string overlayWidthStr = _api.ReplaceVariables("#CURRENTCONFIGWIDTH#");
                         string overlayHeightStr = _api.ReplaceVariables("#CURRENTCONFIGHEIGHT#");
                         int overlayWidth = 400, overlayHeight = 300;
@@ -169,12 +196,16 @@ namespace InputTextX
 
                         int overlayX = baseX;
                         int overlayY = baseY;
-                        _api.Log(API.LogType.Notice, $"Overlay bounds: {overlayX},{overlayY} {overlayWidth}x{overlayHeight}");
+                        if (logging == 1)
+                            _api.Log(API.LogType.Notice, $"Overlay bounds: {overlayX},{overlayY} {overlayWidth}x{overlayHeight}");
 
                         Action<string> execCallback = (action) =>
                         {
                             if (!string.IsNullOrEmpty(action))
-                                _api.Log(API.LogType.Notice, "Executing action: " + action);
+                            {
+                                if (logging == 1)
+                                    _api.Log(API.LogType.Notice, "Executing action: " + action);
+                            }
                         };
 
                         inputOverlay = new InputOverlay(
@@ -194,7 +225,8 @@ namespace InputTextX
                         inputOverlay.TextSubmitted += (s, text) =>
                         {
                             currentText = text;
-                            _api.Log(API.LogType.Notice, "Text submitted: " + text);
+                            if (logging == 1)
+                                _api.Log(API.LogType.Notice, "Text submitted: " + text);
                         };
                         Application.Run(inputOverlay);
                     });
@@ -214,7 +246,8 @@ namespace InputTextX
             }
             catch (Exception ex)
             {
-                _api.Log(API.LogType.Notice, "Error during Unload: " + ex.Message);
+                if (logging == 1)
+                    _api.Log(API.LogType.Notice, "Error during Unload: " + ex.Message);
             }
         }
 
@@ -497,7 +530,6 @@ namespace InputTextX
             this.Show();
             this.DesktopLocation = new Point(inputX, inputY);
 
-            // Set window Z-order based on _topMost value.
             if (_topMost == 1)
             {
                 SetWindowPos(this.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
@@ -506,9 +538,10 @@ namespace InputTextX
             }
             else
             {
-                SetWindowPos(this.Handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                // Bring the input overlay window above the overlay form.
                 SetWindowPos(overlayForm.Handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-                _executeActionCallback?.Invoke("InputOverlay: Windows set to NOT TOPMOST.");
+                SetWindowPos(this.Handle, overlayForm.Handle, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                _executeActionCallback?.Invoke("InputOverlay: Windows set to NOT TOPMOST; input overlay brought to front.");
             }
         }
 

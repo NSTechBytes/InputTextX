@@ -8,7 +8,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using Rainmeter;
 
-namespace InputTextXPlugin
+namespace InputTextX
 {
     // Define an enumeration for the allowed input types.
     public enum InputTypeOption

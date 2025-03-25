@@ -1,365 +1,233 @@
 ﻿using System;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Windows.Forms;
 using System.Drawing;
 using System.Drawing.Text;
 using System.IO;
-using System.Reflection;
-using System.Runtime.InteropServices;
-using System.Windows.Forms;
+using System.Text.RegularExpressions;
 using Rainmeter;
 
-namespace InputTextX
+namespace InputTextXPlugin
 {
-    public class InputTextXForm : Form
+    // Define an enumeration for the allowed input types.
+    public enum InputTypeOption
     {
-        public TextBox InputBox;
-
-        public InputTextXForm()
-        {
-            // Use manual positioning.
-            this.FormBorderStyle = FormBorderStyle.None;
-            this.StartPosition = FormStartPosition.Manual;
-            this.BackColor = Color.White; // Will be overridden by SolidColor.
-            this.Opacity = 1.0; // Fully opaque.
-            this.Width = 300;
-            this.Height = 50;
-            // Default TopMost; will be updated by InputTopMost.
-            this.TopMost = false;
-            this.ShowInTaskbar = false;
-
-            InputBox = new TextBox
-            {
-                Dock = DockStyle.Fill,
-                Font = new Font("Segoe UI", 12),
-                // Default border style; can be updated based on Border option.
-                BorderStyle = BorderStyle.FixedSingle,
-                TextAlign = HorizontalAlignment.Left,
-                UseSystemPasswordChar = false
-            };
-            this.Controls.Add(InputBox);
-        }
+        String,
+        Integer,
+        Float,
+        Letters,
+        Alphanumeric,
+        Hexadecimal,
+        Email,
+        Custom
     }
 
-    public class Measure
+    internal class Measure
     {
-        public API _api;  // Made public so helper methods can access if needed.
-        private InputTextXForm _inputForm;
-        private string _initialText;
-        private string _onTextChangedAction;
-        private string _onDismissAction;
-        private string _onInvalidAction;
-        private string _onESCAction;
-        private string _onEnterAction;
+        private API _api;
+        private static Thread inputThread;
+        private static InputOverlay inputOverlay;
+        private string currentText = "";
+        private int unFocusDismiss = 1; // 1 = dismiss on unfocus; 0 = do not dismiss
 
-        private int _width = 300;
-        private int _height = 50;
-        private int _fontSize = 12;
-        private Color _fontColor = Color.Black;
-        private HorizontalAlignment _stringAlign = HorizontalAlignment.Left;
-        private bool _password = false;
-        // StringStyle option (Normal, Bold, Italic, BoldItalic)
-        private FontStyle _stringStyle = FontStyle.Regular;
-        private bool _multiline = false;
-        private bool _unfocusDismiss = false;
-        private int _inputLimit = 0;
-        private string _inputType = "string";
-        private string _allowedChars = "";
-        private bool _initialSet = false;
+        // Existing properties read from the measure.
+        private int inputWidth = 300;
+        private int inputHeight = 40;
+        private Color solidColor = Color.White;
+        private Color fontColor = Color.Black;
+        private float fontSize = 12f;
 
-        // FontFace option (e.g., "Ubuntu")
-        private string _fontFace = "Segoe UI";
-        // X and Y offsets.
-        private int _offsetX = 0;
-        private int _offsetY = 0;
-        // SolidColor for background.
-        private Color _solidColor = Color.White;
-        // InputTopMost option:
-        // "1" forces the input field to be topmost;
-        // "0" forces it not to be topmost;
-        // empty means do not override.
-        private string _inputTopMost = "";
-        // TopMostOffsetY to adjust Y when InputTopMost is "1"
-        private int _topMostOffsetY = 0;
-        // Border option: "1" shows border, "0" hides border.
-        private string _border = "1";
-        // Flag to compute position only once.
-        private bool _positionSet = false;
+        // New appearance properties.
+        private HorizontalAlignment textAlign = HorizontalAlignment.Center;
+        private bool isPassword = false;
+        private FontStyle fontStyleParam = FontStyle.Regular;
+        private string fontFace = "Segoe UI"; // default or custom font family name
 
-        // Import SetForegroundWindow as public static.
-        [DllImport("user32.dll")]
-        public static extern bool SetForegroundWindow(IntPtr hWnd);
+        // New behavioral properties.
+        private bool multiline = false;
+        private int allowScroll = 0; // 1 = allow scrollbars in multiline
+        private int inputLimit = 0;  // 0 means no limit
+        private string defaultValue = "";
 
-        public Measure()
-        {
-            _inputForm = new InputTextXForm();
-        }
+        // New input filtering properties.
+        private InputTypeOption inputType = InputTypeOption.String;
+        private string allowedChars = ""; // used if inputType==Custom
 
-        public void Dispose()
-        {
-            if (_inputForm != null)
-            {
-                _inputForm.Close();
-                _inputForm.Dispose();
-                _inputForm = null;
-            }
-        }
+        // New action parameters.
+        private string onDismissAction = "";
+        private string onEnterAction = "";
+        private string onESCAction = "";
+        private string onInvalidAction = "";
 
-        // Helper method to read the Draggable value from the INI file.
-        private string ReadDraggableValue()
-        {
-            try
-            {
-                string settingsPath = _api.ReplaceVariables("#SETTINGSPATH#");
-                string iniFilePath = Path.Combine(settingsPath, "Rainmeter.ini");
-                if (File.Exists(iniFilePath))
-                {
-                    string[] lines = File.ReadAllLines(iniFilePath);
-                    bool inSection = false;
-                    string currentConfig = _api.ReplaceVariables("#CURRENTCONFIG#");
-                    foreach (string line in lines)
-                    {
-                        string trimmed = line.Trim();
-                        if (trimmed.StartsWith("[") && trimmed.EndsWith("]"))
-                        {
-                            inSection = string.Equals(trimmed, "[" + currentConfig + "]", StringComparison.OrdinalIgnoreCase);
-                        }
-                        else if (inSection && trimmed.StartsWith("Draggable=", StringComparison.OrdinalIgnoreCase))
-                        {
-                            string[] parts = trimmed.Split('=');
-                            if (parts.Length > 1)
-                            {
-                                return parts[1].Trim();
-                            }
-                        }
-                    }
-                }
-            }
-            catch { }
-            return "1"; // default draggable value if not found.
-        }
+        // New offset parameters.
+        private int offsetX = 0;
+        private int offsetY = 0;
 
-        // Public method to restore the draggable state.
-        public void RestoreDraggable()
-        {
-            string draggableValue = ReadDraggableValue();
-            _api.Execute("[!Draggable " + draggableValue + "]");
-        }
+        // New border parameters.
+        private int allowBorder = 0;
+        private Color borderColor = Color.Black;
+        private int borderThickness = 2;
 
-        public void Reload(API api, ref double maxValue)
+        // New numeric range parameters.
+        private double minValue = double.MinValue;
+        private double maxValue = double.MaxValue;
+
+        // New TopMost parameter.
+        private int topMost = 1;
+
+        internal void Reload(API api, ref double maxValueOut)
         {
             _api = api;
+            _api.Log(API.LogType.Notice, "Reloading measure...");
+            unFocusDismiss = api.ReadInt("UnFocusDismiss", 1);
 
-            // Read initial text and actions.
-            _initialText = _api.ReadString("InitialText", "");
-            _onTextChangedAction = _api.ReadString("OnTextChangedAction", "");
-            _onDismissAction = _api.ReadString("OnDismissAction", "");
-            _onInvalidAction = _api.ReadString("OnInvalidAction", "");
-            _onESCAction = _api.ReadString("OnESCAction", "");
-            _onEnterAction = _api.ReadString("OnEnterAction", "");
+            inputWidth = api.ReadInt("W", 300);
+            inputHeight = api.ReadInt("H", 40);
+            string solidColorStr = api.ReadString("SolidColor", "255,255,255");
+            solidColor = ParseColor(solidColorStr, Color.White);
+            string fontColorStr = api.ReadString("FontColor", "0,0,0");
+            fontColor = ParseColor(fontColorStr, Color.Black);
+            fontSize = api.ReadInt("FontSize", 12);
 
-            _width = _api.ReadInt("Width", 300);
-            _height = _api.ReadInt("Height", 50);
-            _fontSize = _api.ReadInt("FontSize", 12);
-            string fontColorString = _api.ReadString("FontColor", "0,0,0");
-            _fontColor = ParseColor(fontColorString, Color.Black);
-
-            string alignString = _api.ReadString("StringAlign", "Left").ToLowerInvariant();
-            switch (alignString)
+            string alignStr = api.ReadString("Align", "Center");
+            switch (alignStr.ToLower())
             {
-                case "center":
-                    _stringAlign = HorizontalAlignment.Center;
-                    break;
-                case "right":
-                    _stringAlign = HorizontalAlignment.Right;
-                    break;
-                default:
-                    _stringAlign = HorizontalAlignment.Left;
-                    break;
+                case "left": textAlign = HorizontalAlignment.Left; break;
+                case "right": textAlign = HorizontalAlignment.Right; break;
+                default: textAlign = HorizontalAlignment.Center; break;
             }
 
-            string passwordStr = _api.ReadString("Password", "0");
-            _password = (passwordStr.Equals("1") || passwordStr.Equals("true", StringComparison.OrdinalIgnoreCase));
-
-            // Read StringStyle option.
-            string styleStr = _api.ReadString("StringStyle", "Normal").ToLowerInvariant();
-            switch (styleStr)
+            isPassword = api.ReadInt("Password", 0) == 1;
+            string styleStr = api.ReadString("FontStyle", "Normal");
+            switch (styleStr.ToLower())
             {
-                case "bold":
-                    _stringStyle = FontStyle.Bold;
-                    break;
-                case "italic":
-                    _stringStyle = FontStyle.Italic;
-                    break;
-                case "bolditalic":
-                    _stringStyle = FontStyle.Bold | FontStyle.Italic;
-                    break;
-                default:
-                    _stringStyle = FontStyle.Regular;
-                    break;
+                case "bolditalic": fontStyleParam = FontStyle.Bold | FontStyle.Italic; break;
+                case "bold": fontStyleParam = FontStyle.Bold; break;
+                case "italic": fontStyleParam = FontStyle.Italic; break;
+                default: fontStyleParam = FontStyle.Regular; break;
             }
+            fontFace = api.ReadString("FontFace", "Segoe UI");
+            if (!Path.IsPathRooted(fontFace))
+                fontFace = GetFontPathForFamily(fontFace, fontStyleParam);
 
-            // Read FontFace option.
-            _fontFace = _api.ReadString("FontFace", "Segoe UI");
+            multiline = api.ReadInt("Multiline", 0) == 1;
+            allowScroll = api.ReadInt("AllowScroll", 0);
+            inputLimit = api.ReadInt("InputLimit", 0);
+            defaultValue = api.ReadString("DefaultValue", "");
 
-            // Read offset values.
-            _offsetX = _api.ReadInt("X", 0);
-            _offsetY = _api.ReadInt("Y", 0);
+            string inputTypeStr = api.ReadString("InputType", "String");
+            if (!Enum.TryParse(inputTypeStr, true, out inputType))
+                inputType = InputTypeOption.String;
+            allowedChars = api.ReadString("AllowedChars", "");
 
-            // Read TopMostOffsetY option.
-            _topMostOffsetY = _api.ReadInt("TopMostOffsetY", 0);
+            onDismissAction = api.ReadString("OnDismissAction", "");
+            onEnterAction = api.ReadString("OnEnterAction", "");
+            onESCAction = api.ReadString("OnESCAction", "");
+            onInvalidAction = api.ReadString("InValidAction", "");
 
-            // Read SolidColor option ("R,G,B"). Default is white.
-            string solidColorString = _api.ReadString("SolidColor", "255,255,255");
-            _solidColor = ParseColor(solidColorString, Color.White);
+            offsetX = api.ReadInt("X", 0);
+            offsetY = api.ReadInt("Y", 0);
 
-            // Read InputTopMost option.
-            _inputTopMost = _api.ReadString("InputTopMost", "");
+            allowBorder = api.ReadInt("AllowBorder", 0);
+            borderColor = ParseColor(api.ReadString("BorderColor", "0,0,0"), Color.Black);
+            borderThickness = api.ReadInt("BorderThickness", 2);
 
-            // Read Border option.
-            _border = _api.ReadString("Border", "1");
+            minValue = api.ReadDouble("MinValue", double.MinValue);
+            maxValue = api.ReadDouble("MaxValue", double.MaxValue);
 
-            _multiline = _api.ReadInt("Multiline", 0) == 1;
-            _inputForm.InputBox.Multiline = _multiline;
-            _unfocusDismiss = _api.ReadInt("UnFocusDismiss", 0) == 1;
-            _inputForm.Deactivate -= InputForm_Deactivate;
-            _inputForm.Deactivate += InputForm_Deactivate;
+            topMost = api.ReadInt("TopMost", 1);
 
-            _inputLimit = _api.ReadInt("InputLimit", 0);
-            _inputForm.InputBox.MaxLength = (_inputLimit > 0) ? _inputLimit : 0;
+            _api.Log(API.LogType.Notice, $"Reload complete. Input dimensions: {inputWidth}x{inputHeight}");
+        }
 
-            _inputType = _api.ReadString("InputType", "String").ToLowerInvariant();
-            if (_inputType == "custom")
+        internal double Update() => currentText.Length;
+        internal string GetString() => currentText;
+
+        internal void ExecuteCommand(string command)
+        {
+            if (string.IsNullOrEmpty(command))
+                return;
+
+            if (command.Equals("Start", StringComparison.InvariantCultureIgnoreCase))
             {
-                _allowedChars = _api.ReadString("AllowedChars", "");
-            }
-
-            _inputForm.Width = _width;
-            _inputForm.Height = _height;
-
-            // Set solid background color.
-            _inputForm.BackColor = _solidColor;
-            _inputForm.InputBox.BackColor = _solidColor;
-            _inputForm.InputBox.BorderStyle = (_border == "1") ? BorderStyle.FixedSingle : BorderStyle.None;
-            _inputForm.Opacity = 1.0;
-
-            // Set initial text only if not already set.
-            if (!_initialSet && !string.IsNullOrEmpty(_initialText) && string.IsNullOrEmpty(_inputForm.InputBox.Text))
-            {
-                _inputForm.InputBox.Text = _initialText;
-                _initialSet = true;
-            }
-
-            // --- Font Creation using FontFace ---
-            Font newFont = null;
-            try
-            {
-                string basePath = _api.ReplaceVariables("#@#");
-                string fontsFolder = Path.Combine(basePath, "Fonts");
-
-                string candidate = "";
-                if (_stringStyle == FontStyle.Regular)
+                _api.Log(API.LogType.Notice, "ExecuteCommand: Starting input overlay...");
+                if (inputThread == null || !inputThread.IsAlive)
                 {
-                    candidate = _fontFace + ".ttf";
-                    if (!File.Exists(Path.Combine(fontsFolder, candidate)))
-                        candidate = _fontFace + "-Regular.ttf";
-                    if (!File.Exists(Path.Combine(fontsFolder, candidate)))
+                    inputThread = new Thread(() =>
                     {
-                        candidate = _fontFace + ".otf";
-                        if (!File.Exists(Path.Combine(fontsFolder, candidate)))
-                            candidate = _fontFace + "-Regular.otf";
-                    }
-                }
-                else if (_stringStyle == FontStyle.Bold)
-                {
-                    candidate = _fontFace + "-Bold.ttf";
-                    if (!File.Exists(Path.Combine(fontsFolder, candidate)))
-                        candidate = _fontFace + "-Bold.otf";
-                }
-                else if (_stringStyle == FontStyle.Italic)
-                {
-                    candidate = _fontFace + "-Italic.ttf";
-                    if (!File.Exists(Path.Combine(fontsFolder, candidate)))
-                        candidate = _fontFace + "-Italic.otf";
-                }
-                else if (_stringStyle == (FontStyle.Bold | FontStyle.Italic))
-                {
-                    candidate = _fontFace + "-BoldItalic.ttf";
-                    if (!File.Exists(Path.Combine(fontsFolder, candidate)))
-                        candidate = _fontFace + "-BoldItalic.otf";
-                }
+                        int baseX = int.Parse(_api.ReplaceVariables("#CURRENTCONFIGX#"));
+                        int baseY = int.Parse(_api.ReplaceVariables("#CURRENTCONFIGY#"));
+                        _api.Log(API.LogType.Notice, $"Base coordinates: {baseX},{baseY}");
+                        _api.Log(API.LogType.Notice, $"Offset: {offsetX},{offsetY}");
 
-                string fontFilePath = Path.Combine(fontsFolder, candidate);
-                if (File.Exists(fontFilePath))
-                {
-                    PrivateFontCollection pfc = new PrivateFontCollection();
-                    pfc.AddFontFile(fontFilePath);
-                    newFont = new Font(pfc.Families[0], _fontSize, _stringStyle);
-                }
-                else
-                {
-                    try
-                    {
-                        newFont = new Font(_fontFace, _fontSize, _stringStyle);
-                    }
-                    catch
-                    {
-                        newFont = new Font("Segoe UI", _fontSize, _stringStyle);
-                    }
-                }
-            }
-            catch
-            {
-                newFont = new Font("Segoe UI", _fontSize, _stringStyle);
-            }
-            _inputForm.InputBox.Font = newFont;
-            // --- End Font Creation ---
+                        string overlayWidthStr = _api.ReplaceVariables("#CURRENTCONFIGWIDTH#");
+                        string overlayHeightStr = _api.ReplaceVariables("#CURRENTCONFIGHEIGHT#");
+                        int overlayWidth = 400, overlayHeight = 300;
+                        int.TryParse(overlayWidthStr, out overlayWidth);
+                        int.TryParse(overlayHeightStr, out overlayHeight);
 
-            _inputForm.InputBox.ForeColor = _fontColor;
-            _inputForm.InputBox.TextAlign = _stringAlign;
+                        int overlayX = baseX;
+                        int overlayY = baseY;
+                        _api.Log(API.LogType.Notice, $"Overlay bounds: {overlayX},{overlayY} {overlayWidth}x{overlayHeight}");
 
-            if (_password)
-            {
-                _inputForm.InputBox.UseSystemPasswordChar = false;
-                _inputForm.InputBox.PasswordChar = '*';
-            }
-            else
-            {
-                _inputForm.InputBox.PasswordChar = '\0';
-            }
+                        Action<string> execCallback = (action) =>
+                        {
+                            if (!string.IsNullOrEmpty(action))
+                                _api.Log(API.LogType.Notice, "Executing action: " + action);
+                        };
 
-            _inputForm.InputBox.TextChanged -= InputBox_TextChanged;
-            _inputForm.InputBox.TextChanged += InputBox_TextChanged;
-            _inputForm.InputBox.KeyPress -= InputBox_KeyPress;
-            _inputForm.InputBox.KeyPress += InputBox_KeyPress;
-            _inputForm.InputBox.KeyDown -= InputBox_KeyDown;
-            _inputForm.InputBox.KeyDown += InputBox_KeyDown;
-
-            // --- TopMost handling ---
-            if (!string.IsNullOrEmpty(_inputTopMost))
-            {
-                if (_inputTopMost == "1")
-                {
-                    _inputForm.TopMost = true;
-                }
-                else if (_inputTopMost == "0")
-                {
-                    _inputForm.TopMost = false;
-                    _inputForm.BringToFront();
-                    _inputForm.Activate();
-                    SetForegroundWindow(_inputForm.Handle);
+                        inputOverlay = new InputOverlay(
+                            unFocusDismiss,
+                            overlayX, overlayY, overlayWidth, overlayHeight,
+                            inputWidth, inputHeight, solidColor, fontColor, fontSize,
+                            textAlign, isPassword, fontStyleParam, multiline,
+                            allowScroll, inputType, allowedChars,
+                            onDismissAction, onEnterAction, onESCAction, onInvalidAction,
+                            execCallback,
+                            inputLimit, defaultValue, fontFace,
+                            offsetX, offsetY,
+                            allowBorder,
+                            borderColor, borderThickness,
+                            minValue, maxValue,
+                            topMost);
+                        inputOverlay.TextSubmitted += (s, text) =>
+                        {
+                            currentText = text;
+                            _api.Log(API.LogType.Notice, "Text submitted: " + text);
+                        };
+                        Application.Run(inputOverlay);
+                    });
+                    inputThread.SetApartmentState(ApartmentState.STA);
+                    inputThread.IsBackground = true;
+                    inputThread.Start();
                 }
             }
         }
 
-        private Color ParseColor(string colorString, Color defaultColor)
+        internal void Unload()
         {
             try
             {
-                string[] parts = colorString.Split(',');
+                if (inputOverlay != null && !inputOverlay.IsDisposed)
+                    inputOverlay.Invoke(new Action(() => inputOverlay.Close()));
+            }
+            catch (Exception ex)
+            {
+                _api.Log(API.LogType.Notice, "Error during Unload: " + ex.Message);
+            }
+        }
+
+        private Color ParseColor(string colorStr, Color defaultColor)
+        {
+            try
+            {
+                string[] parts = colorStr.Split(',');
                 if (parts.Length >= 3)
                 {
-                    int r = int.Parse(parts[0]);
-                    int g = int.Parse(parts[1]);
-                    int b = int.Parse(parts[2]);
+                    int r = int.Parse(parts[0].Trim());
+                    int g = int.Parse(parts[1].Trim());
+                    int b = int.Parse(parts[2].Trim());
                     return Color.FromArgb(r, g, b);
                 }
             }
@@ -367,248 +235,442 @@ namespace InputTextX
             return defaultColor;
         }
 
-        private void InputBox_TextChanged(object sender, EventArgs e)
+        private string GetFontPathForFamily(string fontFamily, FontStyle style)
         {
-            if (!string.IsNullOrEmpty(_onTextChangedAction))
-            {
-                _api.Execute(_onTextChangedAction);
-            }
-        }
+            string fontsFolder = Path.Combine(_api.ReplaceVariables("#@#"), "Fonts");
+            if (!Directory.Exists(fontsFolder))
+                return fontFamily;
 
-        private void InputBox_KeyPress(object sender, KeyPressEventArgs e)
-        {
-            if (char.IsControl(e.KeyChar))
-                return;
-            TextBox tb = sender as TextBox;
-            bool valid = true;
-            switch (_inputType)
+            var files = new System.Collections.Generic.List<string>();
+            files.AddRange(Directory.GetFiles(fontsFolder, "*.ttf"));
+            files.AddRange(Directory.GetFiles(fontsFolder, "*.otf"));
+
+            var candidates = new System.Collections.Generic.List<string>();
+            foreach (string file in files)
             {
-                case "integer":
-                    if (!char.IsDigit(e.KeyChar) && e.KeyChar != '-')
-                        valid = false;
-                    else if (e.KeyChar == '-' && tb.SelectionStart != 0)
-                        valid = false;
-                    break;
-                case "float":
-                    if (!char.IsDigit(e.KeyChar) && e.KeyChar != '-' && e.KeyChar != '.')
-                        valid = false;
-                    else if (e.KeyChar == '-' && (tb.SelectionStart != 0 || tb.Text.Contains("-")))
-                        valid = false;
-                    else if (e.KeyChar == '.' && tb.Text.Contains("."))
-                        valid = false;
-                    break;
-                case "letters":
-                    if (!char.IsLetter(e.KeyChar))
-                        valid = false;
-                    break;
-                case "alphanumeric":
-                    if (!char.IsLetterOrDigit(e.KeyChar))
-                        valid = false;
-                    break;
-                case "hexadecimal":
-                    if (!char.IsDigit(e.KeyChar) && !"abcdefABCDEF".Contains(e.KeyChar.ToString()))
-                        valid = false;
-                    break;
-                case "email":
-                    if (!char.IsLetterOrDigit(e.KeyChar) && e.KeyChar != '@' && e.KeyChar != '.' && e.KeyChar != '_' && e.KeyChar != '-')
-                        valid = false;
-                    break;
-                case "custom":
-                    if (!string.IsNullOrEmpty(_allowedChars) && !_allowedChars.Contains(e.KeyChar.ToString()))
-                        valid = false;
-                    break;
-                default:
-                    break;
+                string fileName = Path.GetFileNameWithoutExtension(file);
+                if (fileName.StartsWith(fontFamily, StringComparison.OrdinalIgnoreCase))
+                    candidates.Add(file);
             }
-            if (!valid)
+            if (candidates.Count == 0)
+                return fontFamily;
+
+            string styleStr = "";
+            if ((style & FontStyle.Bold) == FontStyle.Bold && (style & FontStyle.Italic) == FontStyle.Italic)
+                styleStr = "BoldItalic";
+            else if ((style & FontStyle.Bold) == FontStyle.Bold)
+                styleStr = "Bold";
+            else if ((style & FontStyle.Italic) == FontStyle.Italic)
+                styleStr = "Italic";
+
+            if (!string.IsNullOrEmpty(styleStr))
             {
-                e.Handled = true;
-                if (!string.IsNullOrEmpty(_onInvalidAction))
+                foreach (string candidate in candidates)
                 {
-                    _api.Execute(_onInvalidAction);
+                    string candidateName = Path.GetFileNameWithoutExtension(candidate);
+                    if (candidateName.IndexOf(styleStr, StringComparison.OrdinalIgnoreCase) >= 0)
+                        return candidate;
                 }
             }
+            foreach (string candidate in candidates)
+            {
+                string candidateName = Path.GetFileNameWithoutExtension(candidate);
+                if (candidateName.IndexOf("Regular", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return candidate;
+            }
+            return candidates[0];
+        }
+    }
+
+    public class InputOverlay : Form
+    {
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
+            int X, int Y, int cx, int cy, uint uFlags);
+        private const uint SWP_NOMOVE = 0x0002;
+        private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_NOACTIVATE = 0x0010;
+        private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+        private static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
+
+        public event EventHandler<string> TextSubmitted;
+        private TextBox textBox;
+        private Form overlayForm;
+        private readonly int unFocusDismiss;
+
+        // Appearance and behavior.
+        private int inputWidth;
+        private int inputHeight;
+        private Color inputBackColor;
+        private Color inputFontColor;
+        private float inputFontSize;
+        private HorizontalAlignment textAlign;
+        private bool isPassword;
+        private FontStyle textFontStyle;
+        private bool multiline;
+        private int allowScroll;
+        private InputTypeOption inputType;
+        private string allowedChars;
+
+        // Action parameters.
+        private string _onDismissAction;
+        private string _onEnterAction;
+        private string _onESCAction;
+        private string _onInvalidAction;
+        private Action<string> _executeActionCallback;
+
+        // Text parameters.
+        private int _inputLimit;
+        private string _defaultValue;
+        private string _fontFace;
+        private PrivateFontCollection _pfc = null;
+
+        // Offset parameters.
+        private int _offsetX;
+        private int _offsetY;
+
+        // Border and numeric range.
+        private int allowBorder;
+        private Color _borderColor;
+        private int _borderThickness;
+        private double _minValue, _maxValue;
+
+        // TopMost parameter.
+        private int _topMost;
+
+        public InputOverlay(
+            int unFocusDismiss,
+            int overlayX, int overlayY, int overlayWidth, int overlayHeight,
+            int inputWidth, int inputHeight, Color inputBackColor, Color inputFontColor, float inputFontSize,
+            HorizontalAlignment textAlign, bool isPassword, FontStyle textFontStyle, bool multiline,
+            int allowScroll, InputTypeOption inputType, string allowedChars,
+            string onDismissAction, string onEnterAction, string onESCAction, string onInvalidAction,
+            Action<string> executeActionCallback,
+            int inputLimit, string defaultValue, string fontFace,
+            int offsetX, int offsetY,
+            int allowBorder,
+            Color borderColor, int borderThickness,
+            double minValue, double maxValue,
+            int topMost)
+        {
+            this.unFocusDismiss = unFocusDismiss;
+            this.inputWidth = inputWidth;
+            this.inputHeight = inputHeight;
+            this.inputBackColor = inputBackColor;
+            this.inputFontColor = inputFontColor;
+            this.inputFontSize = inputFontSize;
+            this.textAlign = textAlign;
+            this.isPassword = isPassword;
+            this.textFontStyle = textFontStyle;
+            this.multiline = multiline;
+            this.allowScroll = allowScroll;
+            this.inputType = inputType;
+            this.allowedChars = allowedChars;
+
+            _onDismissAction = onDismissAction;
+            _onEnterAction = onEnterAction;
+            _onESCAction = onESCAction;
+            _onInvalidAction = onInvalidAction;
+            _executeActionCallback = executeActionCallback;
+
+            _inputLimit = inputLimit;
+            _defaultValue = defaultValue;
+            _fontFace = fontFace;
+            _offsetX = offsetX;
+            _offsetY = offsetY;
+
+            this.allowBorder = allowBorder;
+            _borderColor = borderColor;
+            _borderThickness = borderThickness;
+            _minValue = minValue;
+            _maxValue = maxValue;
+
+            _topMost = topMost;
+
+            // Create overlay form.
+            overlayForm = new Form
+            {
+                FormBorderStyle = FormBorderStyle.None,
+                ShowInTaskbar = false,
+                StartPosition = FormStartPosition.Manual,
+                BackColor = Color.Black,
+                Opacity = 0.01,
+                TopMost = (_topMost == 1),
+                Bounds = new Rectangle(overlayX, overlayY, overlayWidth, overlayHeight)
+            };
+
+            if (unFocusDismiss == 0)
+            {
+                overlayForm.MouseDown += (s, e) =>
+                {
+                    this.Activate();
+                    if (textBox != null)
+                        textBox.Focus();
+                };
+            }
+
+            this.FormBorderStyle = FormBorderStyle.None;
+            this.BackColor = Color.Magenta;
+            this.TransparencyKey = Color.Magenta;
+            this.ShowInTaskbar = false;
+            this.TopMost = (_topMost == 1);
+            int inputX = overlayX + _offsetX;
+            int inputY = overlayY + _offsetY;
+            this.Bounds = new Rectangle(inputX, inputY, inputWidth, inputHeight);
+
+            Control inputControl = null;
+            if (allowBorder == 1 && _borderThickness > 0)
+            {
+                Panel borderPanel = new Panel
+                {
+                    BackColor = _borderColor,
+                    Location = new Point(0, 0),
+                    Size = new Size(inputWidth, inputHeight),
+                    Padding = new Padding(_borderThickness)
+                };
+
+                textBox = new TextBox
+                {
+                    BorderStyle = BorderStyle.None,
+                    Dock = DockStyle.Fill,
+                    ForeColor = inputFontColor,
+                    TextAlign = textAlign,
+                    BackColor = inputBackColor,
+                    UseSystemPasswordChar = isPassword,
+                    Multiline = multiline,
+                    AutoSize = false,
+                    ScrollBars = (multiline && allowScroll == 1) ? ScrollBars.Vertical : ScrollBars.None
+                };
+                if (_inputLimit > 0)
+                    textBox.MaxLength = _inputLimit;
+                if (!string.IsNullOrEmpty(_defaultValue))
+                    textBox.Text = _defaultValue;
+                borderPanel.Controls.Add(textBox);
+                inputControl = borderPanel;
+            }
+            else
+            {
+                textBox = new TextBox
+                {
+                    BorderStyle = BorderStyle.None,
+                    ForeColor = inputFontColor,
+                    TextAlign = textAlign,
+                    BackColor = inputBackColor,
+                    UseSystemPasswordChar = isPassword,
+                    Multiline = multiline,
+                    AutoSize = false,
+                    ScrollBars = (multiline && allowScroll == 1) ? ScrollBars.Vertical : ScrollBars.None
+                };
+                textBox.SetBounds(0, 0, inputWidth, inputHeight);
+                if (_inputLimit > 0)
+                    textBox.MaxLength = _inputLimit;
+                if (!string.IsNullOrEmpty(_defaultValue))
+                    textBox.Text = _defaultValue;
+                inputControl = textBox;
+            }
+            this.Controls.Add(inputControl);
+
+            Font fontToUse = null;
+            try
+            {
+                if (!string.IsNullOrEmpty(_fontFace) && File.Exists(_fontFace))
+                {
+                    _pfc = new PrivateFontCollection();
+                    _pfc.AddFontFile(_fontFace);
+                    fontToUse = new Font(_pfc.Families[0], inputFontSize, textFontStyle);
+                }
+                else
+                {
+                    fontToUse = new Font(_fontFace, inputFontSize, textFontStyle);
+                }
+            }
+            catch
+            {
+                fontToUse = new Font("Segoe UI", inputFontSize, textFontStyle);
+            }
+            textBox.Font = fontToUse;
+
+            textBox.KeyDown += TextBox_KeyDown;
+            textBox.KeyPress += TextBox_KeyPress;
+
+            overlayForm.Show();
+            this.Show();
+            this.DesktopLocation = new Point(inputX, inputY);
+
+            // Set window Z-order based on _topMost value.
+            if (_topMost == 1)
+            {
+                SetWindowPos(this.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                SetWindowPos(overlayForm.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                _executeActionCallback?.Invoke("InputOverlay: Windows set to TOPMOST.");
+            }
+            else
+            {
+                SetWindowPos(this.Handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                SetWindowPos(overlayForm.Handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                _executeActionCallback?.Invoke("InputOverlay: Windows set to NOT TOPMOST.");
+            }
         }
 
-        private void InputBox_KeyDown(object sender, KeyEventArgs e)
+        private bool ValidateChar(char ch)
+        {
+            if (char.IsControl(ch))
+                return true;
+            switch (inputType)
+            {
+                case InputTypeOption.String: return true;
+                case InputTypeOption.Integer:
+                    if (char.IsDigit(ch)) return true;
+                    if (ch == '-' && textBox.SelectionStart == 0 && !textBox.Text.Contains("-"))
+                        return true;
+                    return false;
+                case InputTypeOption.Float:
+                    if (char.IsDigit(ch)) return true;
+                    if (ch == '-' && textBox.SelectionStart == 0 && !textBox.Text.Contains("-"))
+                        return true;
+                    if (ch == '.' && !textBox.Text.Contains("."))
+                        return true;
+                    return false;
+                case InputTypeOption.Letters: return char.IsLetter(ch);
+                case InputTypeOption.Alphanumeric: return char.IsLetterOrDigit(ch);
+                case InputTypeOption.Hexadecimal:
+                    if (char.IsDigit(ch)) return true;
+                    ch = char.ToUpper(ch);
+                    return (ch >= 'A' && ch <= 'F');
+                case InputTypeOption.Email:
+                    if (char.IsLetterOrDigit(ch)) return true;
+                    if ("@.-_+".IndexOf(ch) >= 0) return true;
+                    return false;
+                case InputTypeOption.Custom:
+                    if (!string.IsNullOrEmpty(allowedChars))
+                        return allowedChars.IndexOf(ch) >= 0;
+                    else
+                        return true;
+                default:
+                    return true;
+            }
+        }
+
+        private void TextBox_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            if (!ValidateChar(e.KeyChar))
+            {
+                _executeActionCallback?.Invoke(_onInvalidAction);
+                e.Handled = true;
+            }
+        }
+
+        private void TextBox_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Escape)
             {
-                if (!string.IsNullOrEmpty(_onESCAction))
-                {
-                    _api.Execute(_onESCAction);
-                }
-                ResetState();
+                _executeActionCallback?.Invoke(_onESCAction);
                 e.Handled = true;
+                CloseInput();
                 return;
             }
-            if (e.KeyCode == Keys.Enter)
+
+            if (!multiline && e.KeyCode == Keys.Enter ||
+                (multiline && e.Control && e.KeyCode == Keys.Enter))
             {
-                if (!_multiline || (_multiline && e.Control))
+                if (inputType == InputTypeOption.Integer)
                 {
-                    if (!string.IsNullOrEmpty(_onEnterAction))
+                    if (int.TryParse(textBox.Text, out int val))
                     {
-                        _api.Execute(_onEnterAction);
+                        if (val < _minValue || val > _maxValue)
+                        {
+                            _executeActionCallback?.Invoke(_onInvalidAction);
+                            e.Handled = true;
+                            return;
+                        }
                     }
-                    ResetState();
-                    e.Handled = true;
-                    e.SuppressKeyPress = true;
                 }
-            }
-        }
-
-        [DllImport("user32.dll")]
-        private static extern IntPtr GetForegroundWindow();
-
-        private void InputForm_Deactivate(object sender, EventArgs e)
-        {
-            IntPtr fg = GetForegroundWindow();
-            if (fg == _inputForm.Handle || fg == _inputForm.InputBox.Handle)
-            {
-                return;
-            }
-            if (_unfocusDismiss && _inputForm.Visible)
-            {
-                _inputForm.Hide();
-                if (!string.IsNullOrEmpty(_onDismissAction))
+                else if (inputType == InputTypeOption.Float)
                 {
-                    _api.Execute(_onDismissAction);
-                }
-                ResetState();
-            }
-        }
-
-        public void ResetFull()
-        {
-            if (_inputForm != null)
-            {
-                _inputForm.Close();
-                _inputForm.Dispose();
-            }
-            _inputForm = new InputTextXForm();
-            _positionSet = false;
-            _initialSet = false;
-        }
-
-        public void ResetState()
-        {
-            ResetFull();
-        }
-
-        public void StartForm()
-        {
-            if (!_positionSet)
-            {
-                try
-                {
-                    int skinX = int.Parse(_api.ReplaceVariables("#CURRENTCONFIGX#"));
-                    int skinY = int.Parse(_api.ReplaceVariables("#CURRENTCONFIGY#"));
-                    int finalY = skinY + _offsetY;
-                    if (_inputTopMost == "1")
+                    if (double.TryParse(textBox.Text, out double val))
                     {
-                        finalY += _topMostOffsetY;
+                        if (val < _minValue || val > _maxValue)
+                        {
+                            _executeActionCallback?.Invoke(_onInvalidAction);
+                            e.Handled = true;
+                            return;
+                        }
                     }
-                    _inputForm.Location = new Point(skinX + _offsetX, finalY);
-                    _positionSet = true;
                 }
-                catch { }
-            }
-            if (!string.IsNullOrEmpty(_inputTopMost))
-            {
-                if (_inputTopMost == "1")
-                {
-                    _inputForm.TopMost = true;
-                }
-                else if (_inputTopMost == "0")
-                {
-                    _inputForm.TopMost = false;
-                    _inputForm.BringToFront();
-                    _inputForm.Activate();
-                    SetForegroundWindow(_inputForm.Handle);
-                }
-            }
-            // On start, disable dragging.
-            _api.Execute("[!Draggable 0]");
-            if (!_inputForm.Visible)
-            {
-                _inputForm.Show();
+                _executeActionCallback?.Invoke(_onEnterAction);
+                TextSubmitted?.Invoke(this, textBox.Text);
+                e.Handled = true;
+                CloseInput();
             }
         }
 
-        public double Update()
+        protected override void OnDeactivate(EventArgs e)
         {
-            return 0.0;
+            base.OnDeactivate(e);
+            if (unFocusDismiss == 1 && overlayForm != null && overlayForm.Visible)
+            {
+                _executeActionCallback?.Invoke(_onDismissAction);
+                CloseInput();
+            }
         }
 
-        public string GetInputText()
+        private void CloseInput()
         {
-            return _inputForm?.InputBox.Text ?? "";
+            try { overlayForm?.Close(); } catch { }
+            this.Close();
         }
     }
 
     public static class Plugin
     {
-        private static IntPtr stringBuffer = IntPtr.Zero;
-
+        private static IntPtr lastStringPtr = IntPtr.Zero;
         [DllExport]
         public static void Initialize(ref IntPtr data, IntPtr rm)
         {
             data = GCHandle.ToIntPtr(GCHandle.Alloc(new Measure()));
         }
-
         [DllExport]
         public static void Finalize(IntPtr data)
         {
             Measure measure = (Measure)GCHandle.FromIntPtr(data).Target;
-            measure.Dispose();
+            measure.Unload();
             GCHandle.FromIntPtr(data).Free();
-            if (stringBuffer != IntPtr.Zero)
+            if (lastStringPtr != IntPtr.Zero)
             {
-                Marshal.FreeHGlobal(stringBuffer);
-                stringBuffer = IntPtr.Zero;
+                Marshal.FreeHGlobal(lastStringPtr);
+                lastStringPtr = IntPtr.Zero;
             }
         }
-
         [DllExport]
         public static void Reload(IntPtr data, IntPtr rm, ref double maxValue)
         {
             Measure measure = (Measure)GCHandle.FromIntPtr(data).Target;
             measure.Reload(new API(rm), ref maxValue);
         }
-
         [DllExport]
         public static double Update(IntPtr data)
         {
             Measure measure = (Measure)GCHandle.FromIntPtr(data).Target;
             return measure.Update();
         }
-
         [DllExport]
         public static IntPtr GetString(IntPtr data)
         {
             Measure measure = (Measure)GCHandle.FromIntPtr(data).Target;
-            string result = measure.GetInputText();
-            if (stringBuffer != IntPtr.Zero)
+            string s = measure.GetString();
+            if (lastStringPtr != IntPtr.Zero)
             {
-                Marshal.FreeHGlobal(stringBuffer);
+                Marshal.FreeHGlobal(lastStringPtr);
+                lastStringPtr = IntPtr.Zero;
             }
-            stringBuffer = Marshal.StringToHGlobalUni(result);
-            return stringBuffer;
+            lastStringPtr = Marshal.StringToHGlobalUni(s);
+            return lastStringPtr;
         }
-
         [DllExport]
-        public static void ExecuteBang(IntPtr data, [MarshalAs(UnmanagedType.LPWStr)] string command)
+        public static void ExecuteBang(IntPtr data, [MarshalAs(UnmanagedType.LPWStr)] string args)
         {
             Measure measure = (Measure)GCHandle.FromIntPtr(data).Target;
-            if (string.Equals(command, "Start", StringComparison.OrdinalIgnoreCase))
-            {
-                measure.StartForm();
-            }
-            else if (string.Equals(command, "Stop", StringComparison.OrdinalIgnoreCase))
-            {
-                measure.ResetState();
-                measure.RestoreDraggable();
-            }
+            measure.ExecuteCommand(args);
         }
     }
 }

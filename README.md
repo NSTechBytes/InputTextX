@@ -6,23 +6,15 @@
 
 ## Features
 
-- **Customizable Appearance:**  
-  Configure dimensions, colors, fonts (including custom font files), and borders.
-  
-- **Input Types & Validation:**  
-  Supports `String`, `Integer`, `Float`, `Letters`, `Alphanumeric`, `Hexadecimal`, `Email`, and a custom mode with allowed characters.
+- **Customizable Appearance:**Configure dimensions, colors, fonts (including custom font files), and borders.
+- **Input Types & Validation:**Supports `String`, `Integer`, `Float`, `Letters`, `Alphanumeric`, `Hexadecimal`, `Email`, and a custom mode with allowed characters.
+- **Action Handling:**Execute custom Rainmeter commands on key events:
 
-- **Action Handling:**  
-  Execute custom Rainmeter commands on key events:
   - **OnEnterAction:** Triggered when the user submits the input.
   - **OnESCAction:** Triggered when the user presses the Escape key.
   - **OnDismissAction:** Triggered when the input overlay loses focus.
-
-- **Dynamic Placeholder Replacement:**  
-  Replace the placeholder `$UserInput$` with the current text input before executing commands.  
-  <span style="color: red;"><strong>Note:</strong></span> Special characters (e.g., double quotes) are automatically escaped to ensure valid command syntax.
-
-- **Logging:**  
+- **Dynamic Placeholder Replacement:**Replace the placeholder `$UserInput$` with the current text input before executing commands.`<span style="color: red;"><strong>`Note:`</strong>` Special characters (e.g., double quotes) are automatically escaped to ensure valid command syntax.
+- **Logging:**
   Detailed logging can be enabled for debugging. All logs are printed only when the `Logging` key is set to `1`.
 
 ---
@@ -31,20 +23,18 @@
 
 ### Installation
 
-1. **Build the Plugin:**  
-   Compile the C# code into a DLL (e.g., using Visual Studio) and place it into your Rainmeter plugins folder.
+1. **Build the Plugin:**Compile the C# code into a DLL (e.g., using Visual Studio) and place it into your Rainmeter plugins folder.
+2. **Add the Plugin to Your Skin:**Create a Rainmeter skin and add the following measure:
 
-2. **Add the Plugin to Your Skin:**  
-   Create a Rainmeter skin and add the following measure:
    ```ini
    [MeasureInput]
    Measure=Plugin
    Plugin=InputTextX.dll
    ```
-
-3. **Configure the Plugin:**  
-   Set the desired configuration keys (see below) in your Rainmeter skin.  
+3. **Configure the Plugin:**
+   Set the desired configuration keys (see below) in your Rainmeter skin.
    Example:
+
    ```ini
    [MeasureInput]
    Measure=Plugin
@@ -281,23 +271,21 @@ The `InputType` key supports the following values:
 
 ## Usage Notes
 
-> **Note:**  
+> **Note:**
 > The plugin dynamically replaces the placeholder `$UserInput$` in action keys with the current input text. It also escapes special characters (such as double quotes) to ensure the resulting Rainmeter command is valid.
 
-> **Warning:**  
+> **InputTextX** is incompatible with skins set to **Stay Topmost**, or **AlwaysOnTop=2**, as the conflict between the input field, which requires "focus", and the constant attempts by the skin to stay on "top", in front of the input field, will not allow InputTextX to function correctly.
+
+> **Warning:**
 > Ensure that your custom commands (especially those using `$UserInput$`) are properly formatted. Improper command syntax may cause unexpected behavior in Rainmeter.
 
 ---
 
 ## Troubleshooting
 
-- **Crash on Input:**  
-  If Rainmeter crashes when submitting input, enable logging by setting `Logging=1` to view the final command strings in the Rainmeter log. Verify that the commands are correctly formed.
-
-- **No Command Execution:**  
-  Double-check the action keys (e.g., `OnEnterAction`, `OnESCAction`) in your skin configuration. They must contain valid Rainmeter commands.
-
-- **Positioning Issues:**  
+- **Crash on Input:**If Rainmeter crashes when submitting input, enable logging by setting `Logging=1` to view the final command strings in the Rainmeter log. Verify that the commands are correctly formed.
+- **No Command Execution:**Double-check the action keys (e.g., `OnEnterAction`, `OnESCAction`) in your skin configuration. They must contain valid Rainmeter commands.
+- **Positioning Issues:**
   If the overlay does not appear in the expected location, adjust the `X` and `Y` offset values.
 
 ---

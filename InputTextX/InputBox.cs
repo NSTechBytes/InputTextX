@@ -9,10 +9,12 @@ using System.Threading.Tasks;
 using Rainmeter;
 using System.Windows.Forms;
 using System.IO;
-
+using System.Text.RegularExpressions;
 
 namespace InputTextX
 {
+
+
     public class InputOverlay : Form
     {
         internal static class NativeMethods
@@ -262,6 +264,14 @@ namespace InputTextX
             return input.Replace("\"", "\\\"");
         }
 
+        // New helper: case-insensitive replacement for "$UserInput$"
+        private string ReplacePlaceholder(string command, string replacement)
+        {
+            if (string.IsNullOrEmpty(command))
+                return command;
+            return Regex.Replace(command, Regex.Escape("$UserInput$"), replacement, RegexOptions.IgnoreCase);
+        }
+
         private bool ValidateChar(char ch)
         {
             if (char.IsControl(ch))
@@ -332,7 +342,8 @@ namespace InputTextX
         {
             if (e.KeyCode == Keys.Escape)
             {
-                string command = _onESCAction.Replace("$UserInput$", EscapeCommandArgument(textBox.Text));
+                // Use ReplacePlaceholder for case-insensitive replacement.
+                string command = ReplacePlaceholder(_onESCAction, EscapeCommandArgument(textBox.Text));
                 if (!string.IsNullOrWhiteSpace(command))
                 {
                     if (logging == 1)
@@ -390,7 +401,7 @@ namespace InputTextX
                         }
                     }
                 }
-                string enterCommand = _onEnterAction.Replace("$UserInput$", EscapeCommandArgument(textBox.Text));
+                string enterCommand = ReplacePlaceholder(_onEnterAction, EscapeCommandArgument(textBox.Text));
                 if (!string.IsNullOrWhiteSpace(enterCommand))
                 {
                     if (logging == 1)
@@ -412,7 +423,7 @@ namespace InputTextX
             base.OnDeactivate(e);
             if (!_isClosing && unFocusDismiss == 1)
             {
-                string command = _onDismissAction.Replace("$UserInput$", EscapeCommandArgument(textBox.Text));
+                string command = ReplacePlaceholder(_onDismissAction, EscapeCommandArgument(textBox.Text));
                 if (!string.IsNullOrWhiteSpace(command))
                 {
                     if (logging == 1)
@@ -450,7 +461,7 @@ namespace InputTextX
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
-            this.Opacity = 1;
+            this.Opacity = 1; 
         }
     }
 }

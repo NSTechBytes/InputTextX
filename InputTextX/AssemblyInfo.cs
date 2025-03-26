@@ -1,7 +1,7 @@
 ﻿using System.Reflection;
 using System.Runtime.CompilerServices;
 
-[assembly: AssemblyCopyright("© 2024 - NS Tech Bytes 🇵🇰")]
+[assembly: AssemblyCopyright("© 2025 - NS Tech Bytes 🇵🇰")]
 [assembly: AssemblyVersion("1.0.0.0")]
 
 // Do not change the entries below!

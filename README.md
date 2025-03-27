@@ -4,6 +4,13 @@
 
 
 # Documentation
+Visit :
+[Documnetation](https://inputtextx.pages.dev/documentation)
 
-Visit the website:
-[InputTextX](https://www.rainmeter.net/)
+# Features 
+Visit:
+[Features](https://inputtextx.pages.dev/features)
+
+# Download 
+Visit:
+[Features](https://inputtextx.pages.dev/download)

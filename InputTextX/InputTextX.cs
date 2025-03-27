@@ -153,7 +153,7 @@ namespace InputTextX
             minValue = api.ReadDouble("MinValue", double.MinValue);
             maxValue = api.ReadDouble("MaxValue", double.MaxValue);
 
-            topMost = api.ReadInt("TopMost", 1);
+            topMost = api.ReadInt("TopMost", 0);
             logging = api.ReadInt("Logging", 0);
 
             _api.Execute("[!SetOption InputText_X DynamicVariables 1]");

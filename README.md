@@ -13,4 +13,4 @@ Visit:
 
 # Download 
 Visit:
-[Features](https://inputtextx.pages.dev/download)
+[Download](https://inputtextx.pages.dev/download)

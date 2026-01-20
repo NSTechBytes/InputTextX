@@ -88,7 +88,7 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="InputTextX.cs" />
-    <Compile Include="D:\GitHub\InputTextX\.\API\RainmeterAPI.cs" />
+    <Compile Include="..\API\RainmeterAPI.cs" />
     <Compile Include="Plugin.cs" />
   </ItemGroup>
   <ItemGroup>

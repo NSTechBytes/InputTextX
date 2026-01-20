@@ -1,0 +1,21 @@
+﻿{
+    "skinDir":  ".\\Resources\\Skins",
+    "version":  "1.0.0",
+    "minimumVersion":  "4.5",
+    "author":  "nstechbytes",
+    "variableFiles":  "",
+    "minimumWindows":  "5.1",
+    "plugins":  [
+                    {
+                        "x64":  ".\\dist\\x64",
+                        "x32":  ".\\dist\\x32",
+                        "name":  "InputTextX.dll"
+                    }
+                ],
+    "name":  "InputTextX",
+    "loadType":  "Skin",
+    "load":  "InputTextX\\Main.ini",
+    "headerImage":  ".\\Resources\\banner.bmp",
+    "configPrefix":  "InputTextX",
+    "output":  ".\\dist\\InputTextX_v1.0.0.rmskin"
+}
